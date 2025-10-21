@@ -28,6 +28,10 @@ namespace SalesforceExtension
         private const string PropertyBatchSize = "BatchSize";
         private const int DefaultColumnLength = 4000;
 
+        private readonly List<JObject> _records = new List<JObject>();
+        private Dictionary<string, int> _columnIndexes = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        private IDTSOutput100? _output;
+
         public override void ProvideComponentProperties()
         {
             base.ProvideComponentProperties();
@@ -110,6 +114,35 @@ namespace SalesforceExtension
             }
         }
 
+        public override void PreExecute()
+        {
+            base.PreExecute();
+
+            _records.Clear();
+            _columnIndexes.Clear();
+            _output = ComponentMetaData.OutputCollection.Count > 0 ? ComponentMetaData.OutputCollection[0] : null;
+
+            var soqlQuery = ComponentMetaData.CustomPropertyCollection[PropertySoqlQuery]?.Value as string ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(soqlQuery))
+            {
+                return;
+            }
+
+            var batchSize = Convert.ToInt32(ComponentMetaData.CustomPropertyCollection[PropertyBatchSize]?.Value ?? 200, CultureInfo.InvariantCulture);
+            var options = BuildConnectionOptions();
+
+            using var cancellationSource = new CancellationTokenSource();
+            using var connectionManager = new SalesforceConnectionManager(options);
+            var client = new SalesforceRestClient(connectionManager);
+            var records = client.QueryAsync(soqlQuery, batchSize, cancellationSource.Token).GetAwaiter().GetResult();
+
+            foreach (var record in records)
+            {
+                EnsureOutputColumns(record);
+                _records.Add(record);
+            }
+        }
+
         public override void PrimeOutput(int outputs, int[] outputIDs, PipelineBuffer[] buffers)
         {
             if (buffers is null || buffers.Length == 0)
@@ -118,33 +151,25 @@ namespace SalesforceExtension
             }
 
             var buffer = buffers[0];
-            var options = BuildConnectionOptions();
-            var soqlQuery = ComponentMetaData.CustomPropertyCollection[PropertySoqlQuery]?.Value as string ?? string.Empty;
-            var batchSize = Convert.ToInt32(ComponentMetaData.CustomPropertyCollection[PropertyBatchSize]?.Value ?? 200, CultureInfo.InvariantCulture);
+            var output = _output ?? (ComponentMetaData.OutputCollection.Count > 0 ? ComponentMetaData.OutputCollection[0] : null);
 
-            using var cancellationSource = new CancellationTokenSource();
-            using var connectionManager = new SalesforceConnectionManager(options);
-            var client = new SalesforceRestClient(connectionManager);
-            var records = client.QueryAsync(soqlQuery, batchSize, cancellationSource.Token).GetAwaiter().GetResult();
-
-            if (records.Count == 0)
+            if (_records.Count == 0 || output is null)
             {
                 buffer.SetEndOfRowset();
                 return;
             }
 
-            var output = ComponentMetaData.OutputCollection[0];
-            var columnIndexes = BuildColumnIndexMap(outputIDs[0], output);
-
-            foreach (var record in records)
+            if (_columnIndexes.Count == 0)
             {
-                EnsureOutputColumns(record);
-                columnIndexes = BuildColumnIndexMap(outputIDs[0], output);
+                _columnIndexes = BuildColumnIndexMap(outputIDs[0], output);
+            }
 
+            foreach (var record in _records)
+            {
                 buffer.AddRow();
                 foreach (var property in record.Properties())
                 {
-                    if (!columnIndexes.TryGetValue(property.Name, out var columnIndex))
+                    if (!_columnIndexes.TryGetValue(property.Name, out var columnIndex))
                     {
                         continue;
                     }

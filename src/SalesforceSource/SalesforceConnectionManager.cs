@@ -74,7 +74,7 @@ namespace SalesforceExtension
             var response = await _httpClient.PostAsync(new Uri(new Uri(domain), "/services/oauth2/token"), content, cancellationToken).ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
 
-            var payload = JObject.Parse(await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false));
+            var payload = JObject.Parse(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
             _token = TokenResponse.Parse(payload);
         }
 
@@ -92,7 +92,7 @@ namespace SalesforceExtension
 
             var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
-            var json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            var json = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
             return JObject.Parse(json);
         }
 
