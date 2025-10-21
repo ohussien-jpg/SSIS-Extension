@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <AssemblyName>SalesforceSource</AssemblyName>
+    <RootNamespace>SalesforceExtension</RootNamespace>
+    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="Microsoft.SqlServer.DTSPipelineWrap" />
+    <Reference Include="Microsoft.SqlServer.DTSRuntimeWrap" />
+    <Reference Include="Microsoft.SQLServer.ManagedDTS" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+  </ItemGroup>
+</Project>
